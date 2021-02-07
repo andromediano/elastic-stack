@@ -1,0 +1,90 @@
+version: '3.2'
+
+services:
+
+  #
+  # https://www.elastic.co/guide/en/elastic-stack-get-started/current/get-started-docker.html
+  #
+  elasticsearch:
+    #image: docker.elastic.co/elasticsearch/elasticsearch:$VERSION
+    image: docker.opentest.io/elasticsearch:1.0.0
+    container_name: ${PROJECT_CODE}-elasticsearch
+    # https://www.elastic.co/guide/en/elasticsearch/reference/current/bootstrap-checks.html
+    environment:
+      ES_JAVA_OPTS: "-Xmx256m -Xms256m"
+      discovery.type: single-node
+    # https://docs.docker.com/compose/compose-file/#build
+    build:
+      # Dokerfile이 위치한 디렉토리나 git저장소 URL을 적어줍니다.
+      context: elasticsearch/
+      args:
+        VERSION: $VERSION
+    # https://docs.docker.com/compose/compose-file/#volumes
+    # 3.2버전부터 LONG SYNTAX를 지원한다.
+    volumes:
+      - type: bind
+        source: ./elasticsearch/config/elasticsearch.yml
+        target: /usr/share/elasticsearch/config/elasticsearch.yml
+        read_only: true
+      - type: bind
+        source: ./elasticsearch/data
+        target: /usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    networks:
+      - elastic
+
+  #
+  # https://www.elastic.co/guide/en/logstash/current/docker.html
+  #
+  logstash:
+    image: docker.elastic.co/logstash/logstash:${VERSION}
+    container_name: ${PROJECT_CODE}-logstash
+    volumes:
+      - type: bind
+        source: ./logstash/config/logstash.yml
+        target: /usr/share/logstash/config/logstash.yml
+        read_only: true
+      - type: bind
+        source: ./logstash/pipeline
+        target: /usr/share/logstash/pipeline
+        read_only: true
+    ports:
+      - "5045:5045"
+      - "9600:9600"
+    environment:
+      LS_JAVA_OPTS: "-Xmx256m -Xms256m"
+    networks:
+      - elastic
+    # https://docs.docker.com/compose/compose-file/#depends_on
+    # 의존관계에 있는 서비스를 정의한다. 서비스 시작,중지시 우선순위를 가지게 된다.
+    depends_on:
+      - elasticsearch
+
+  #
+  # https://www.elastic.co/guide/en/kibana/current/docker.html
+  #
+  kibana:
+    image: docker.elastic.co/kibana/kibana:${VERSION}
+    container_name: ${PROJECT_CODE}-kibana
+    volumes:
+      - type: bind
+        source: ./kibana/config/kibana.yml
+        target: /usr/share/kibana/config/kibana.yml
+        read_only: true
+    ports:
+      - "5601:5601"
+    networks:
+      - elastic
+    depends_on:
+      - elasticsearch
+
+# 최상위 volumes의 키는 빈값을 가질 수 있는데 이경우 도커엔진에 의해 설정된 기본 드라이버를 사용한다.
+# 대부분의 경우 `local`드라이버를 사용할 것이다.
+volumes:
+  data:
+
+networks:
+  elastic:
+    driver: bridge
